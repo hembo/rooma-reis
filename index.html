@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#F1F3EF">
+<title>Rooma nädalavahetus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<style>
+/* Layout: sticky header with five tabs (four days + trip info); one day at a time as a plain timeline, times in a mono column, map links on each stop. */
+:root {
+  --bg: #F1F3EF;
+  --surface: #FFFFFF;
+  --ink: #15201C;
+  --muted: #52615B;
+  --line: #D3D9D1;
+  --accent: #0B6657;
+  --on-accent: #FFFFFF;
+  --accent-soft: #DCEAE5;
+  --warn: #7A4E00;
+  --warn-bg: #FAEFD6;
+  --warn-line: #E6CF9A;
+  --font-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --font-body: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1614; --surface: #18221F; --ink: #E8EEEA; --muted: #9AA9A2; --line: #2A3833;
+    --accent: #5FC2AB; --on-accent: #06201A; --accent-soft: #1A3A33;
+    --warn: #F0C26B; --warn-bg: #33290F; --warn-line: #5C4818;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1614; --surface: #18221F; --ink: #E8EEEA; --muted: #9AA9A2; --line: #2A3833;
+  --accent: #5FC2AB; --on-accent: #06201A; --accent-soft: #1A3A33;
+  --warn: #F0C26B; --warn-bg: #33290F; --warn-line: #5C4818;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.45; padding-bottom: 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: inherit; }
+a:focus-visible, button:focus-visible, input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 42rem; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+.bar { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-block: 10px 6px; }
+.brand { font-family: var(--font-display); font-weight: 700; letter-spacing: .2em; font-size: .95rem; }
+.dates { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); }
+nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding-block: 0 8px; }
+.tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 48px; padding: 6px 2px; border-radius: 8px; text-decoration: none; color: var(--muted); }
+.tab span { font-size: .72rem; }
+.tab b { font-family: var(--font-mono); font-weight: 500; font-size: .95rem; }
+.tab[aria-current="page"] { background: var(--accent); color: var(--on-accent); }
+
+main { padding-block: 22px 0; }
+.eyebrow { font-family: var(--font-mono); font-size: .82rem; color: var(--muted); margin: 0 0 6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.today { background: var(--accent); color: var(--on-accent); border-radius: 4px; padding: 1px 7px; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem, 8vw, 2.6rem); letter-spacing: .04em; line-height: 1.1; margin: 0 0 10px; text-wrap: balance; }
+.lead { margin: 0 0 18px; color: var(--muted); max-width: 36rem; }
+.note { margin: 0 0 18px; padding: 10px 12px; background: var(--accent-soft); border-radius: 8px; font-size: .95rem; }
+
+.tl { list-style: none; margin: 0; padding: 0; }
+.tl li { display: grid; grid-template-columns: 3.6rem minmax(0, 1fr); column-gap: 12px; padding: 15px 0; border-top: 1px solid var(--line); }
+.tl li:last-child { border-bottom: 1px solid var(--line); }
+.time { font-family: var(--font-mono); font-size: .95rem; color: var(--accent); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.what { font-weight: 600; overflow-wrap: anywhere; }
+.opt { font-size: .7rem; font-weight: 400; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+.det { margin: 2px 0 0; color: var(--muted); font-size: .95rem; }
+.check { margin: 8px 0 0; padding: 9px 12px; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-line); border-radius: 8px; font-size: .92rem; }
+.check strong { text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; margin-right: 4px; }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--accent); font: inherit; font-size: .92rem; font-weight: 600; text-decoration: none; cursor: pointer; }
+
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; letter-spacing: .14em; text-transform: uppercase; margin: 30px 0 10px; }
+h2:first-of-type { margin-top: 0; }
+.kv { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 8px 12px; margin: 0; }
+.kv dt { color: var(--muted); font-size: .92rem; }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--font-mono); font-size: .92rem; font-variant-numeric: tabular-nums; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { border-top: 1px solid var(--line); }
+.list li:last-child { border-bottom: 1px solid var(--line); }
+.list label { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; min-height: 48px; cursor: pointer; }
+.list input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+.list input:checked + span { color: var(--muted); text-decoration: line-through; }
+.src { font-size: .92rem; color: var(--muted); padding-left: 1.1rem; margin: 0; }
+.src li { margin-bottom: 6px; }
+.src a { color: var(--accent); }
+footer { margin-top: 30px; font-size: .85rem; color: var(--muted); }
+.map { height: 300px; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); position: relative; z-index: 0; isolation: isolate; }
+.cap { margin: 0 0 18px; font-size: .82rem; color: var(--muted); }
+.leaflet-container { font-family: var(--font-body); }
+.pin { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent); border: 2px solid #fff; display: flex; align-items: center; justify-content: center; font: 500 .85rem var(--font-mono); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.pin.opt { background: #7d8883; color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9); } }
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="bar"><div class="brand">Rooma</div><div class="dates">30.10–2.11.2026</div></div>
+    <nav id="tabs" aria-label="Päevad"></nav>
+  </div>
+</header>
+<main class="wrap" id="view" tabindex="-1"></main>
+
+<script src="vendor/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = 'https://www.google.com/maps/';
+  function find(q) { return M + 'search/?api=1&query=' + encodeURIComponent(q); }
+  function go(q, mode) { return M + 'dir/?api=1&travelmode=' + (mode || 'transit') + '&destination=' + encodeURIComponent(q); }
+
+  var HOTEL = 'Via dei Reti 25, 00185 Roma';
+  var ORDER = ['reede', 'laupaev', 'puhapaev', 'esmaspaev', 'reis'];
+  var HOTELLL = [41.8989607, 12.5182096];
+  var LLS = {
+    'Roma Termini': [41.9009, 12.5016],
+    'Rifugio Romano, Via Volturno 39, Roma': [41.9044388, 12.4995988],
+    'Campo de\u2019 Fiori, Roma': [41.8956045, 12.4721757],
+    'Maravé Gelato, Campo de\u2019 Fiori, Roma': [41.8956045, 12.4721757],
+    'Pantheon, Roma': [41.8986, 12.4769],
+    'Vatican Museums, Roma': [41.9064878, 12.4536413],
+    'Pizzeria Il Grano, Via degli Equi 39, Roma': [41.8963393, 12.5133044],
+    'Saint Peter\u2019s Basilica, Vatican': [41.9021667, 12.4539367],
+    'Castel Sant\u2019Angelo, Roma': [41.9030632, 12.466276],
+    'Santa Maria in Trastevere, Roma': [41.889493, 12.4698361],
+    'Trevi Fountain, Roma': [41.9009, 12.4833]
+  };
+  var DAYS = {
+    reede: {
+      date: '2026-10-30', tab: ['Reede', '30.10'], eyebrow: 'Reede · 30. oktoober', title: 'Saabumine',
+      lead: 'Vaatamisväärsusi pole. Eesmärk on süüa korralikult ja olla hotellis enne südaööd, sest laupäev algab vara.',
+      items: [
+        { t: '18:15', w: 'Maandumine Fiumicinos', d: 'LO303, terminal 1. Pagasita, nii et lennujaamast välja umbes 18:45–19:00.', p: 'Fiumicino Airport Terminal 1, Roma' },
+        { t: '19:00', w: 'Leonardo Express Terminisse', d: 'Otserong, sõit umbes 30 min.', check: 'Väljumisajad vaata Trenitalia lehelt.', link: ['Trenitalia', 'https://www.trenitalia.com'] },
+        { t: '19:45', w: 'Termini jaam', d: 'Rifugio Romano on jaamast paari minuti jala kaugusel.', p: 'Roma Termini' },
+        { t: '20:15', w: 'Õhtusöök: Rifugio Romano', d: 'Via Volturno 39/41. Vegan pasta ja pitsa, Google’i andmetel on olemas ka tavamenüü.', check: 'Broneeri laud täna, reedeõhtul on täis. Varuks Il Grano, Via degli Equi 39 (San Lorenzo), reedel avatud 18:30–23:00.', p: 'Rifugio Romano, Via Volturno 39, Roma' },
+        { t: '22:00', w: 'Hotelli', d: 'Terminist 25 min jalgsi või tramm Reti peatusesse. Check-in lahti kuni 00:00.', p: HOTEL }
+      ]
+    },
+    laupaev: {
+      date: '2026-10-31', tab: ['Laupäev', '31.10'], eyebrow: 'Laupäev · 31. oktoober', title: 'Turg ja Vatikan',
+      lead: 'Hommik turul ja kesklinnas, pärastlõuna Vatikanis. Turg on lahti ainult esmaspäevast laupäevani, nii et see on teie ainus võimalus.',
+      note: 'Halloween: San Lorenzo on üliõpilaste linnaosa ja õhtul võib seal olla lärmakas.',
+      items: [
+        { t: '8:00', w: 'Hotellist välja', d: 'Hommikusöök teel.', p: HOTEL },
+        { t: '8:30', w: 'Campo de’ Fiori turg', d: 'Lahti 7:00–14:00. Lilled, puuviljad, vürtsid. Mine enne turiste.', p: 'Campo de’ Fiori, Roma' },
+        { t: '9:30', w: 'Forno Campo de’ Fiori', d: 'Piazza Campo de’ Fiori 22, pizza bianca hommikusöögiks. Küsi koostist.', p: 'Forno Campo de’ Fiori, Roma' },
+        { t: '10:00', w: 'Lambipood', opt: true, d: 'Poe nime ei tea. Sarnane käsitööpood on L.A.R. Paralumi (lambivarjud, alates 1938), aga see on Piazza di Spagna lähedal.', check: 'Lahtiolekuaegu pole, soovitatakse helistada.', p: 'L.A.R. Paralumi, Roma' },
+        { t: '10:15', w: 'Pantheon ja Piazza Navona', d: 'Pantheoni sissepääs piletiga.', p: 'Pantheon, Roma' },
+        { t: '12:00', w: 'Gelato: Maravé', d: 'Piazza Campo de’ Fiori 51. Küsi sorbetit, see on tavaliselt piimavaba.', check: 'Info on 2021. aastast, vaata kohapeal, kas on veel lahti.', p: 'Maravé Gelato, Campo de’ Fiori, Roma' },
+        { t: '12:30', w: 'Prati linnaossa', d: 'Takso või buss.' },
+        { t: '13:00', w: 'Lõuna: Ma Va’', d: 'Via dei Gracchi 87. Täielikult vegan, pasta ja seitan-road, pitsat ei ole.', check: 'Google’i otsing seda ei leidnud. Kontrolli olemasolu ja aegu, broneeri laud.', p: 'Ma Va’ vegan restaurant, Via dei Gracchi 87, Roma' },
+        { t: '14:30', w: 'Vatikani muuseumid ja Sistina kapell', d: 'Laupäeval avatud, pühapäeval ja 1. novembril suletud.', check: 'Viimane sissepääs 18:00, ühes allikas 16:00. Broneeri pilet ainult ametlikult lehelt.', link: ['Piletid', 'https://tickets.museivaticani.va'], p: 'Vatican Museums, Roma' },
+        { t: '19:30', w: 'Õhtusöök: Il Grano', d: 'Via degli Equi 39, San Lorenzo. Vegan pinsa ja gnocchi, laupäeval avatud 19:00–23:30.', check: 'Broneeri laud.', p: 'Pizzeria Il Grano, Via degli Equi 39, Roma' }
+      ]
+    },
+    puhapaev: {
+      date: '2026-11-01', tab: ['Pühapäev', '1.11'], eyebrow: 'Pühapäev · 1. november', title: 'Basiilika ja Trastevere',
+      lead: 'Kõigi pühakute päev on riigipüha: linn on rahvarohke ja Vatikani muuseumid suletud.',
+      items: [
+        { t: '8:30', w: 'Hotellist välja', p: HOTEL },
+        { t: '9:30', w: 'Peetruse basiilika', d: 'Sissepääs tasuta, turvakontrolli järjekord. Kuppel on piletiga, 551 astet.', p: 'Saint Peter’s Basilica, Vatican' },
+        { t: '12:00', w: 'Angelus Peetruse väljakul', d: 'Paavsti palve, tasuta, broneeringut pole vaja.', p: 'Piazza San Pietro, Vatican' },
+        { t: '13:00', w: 'Lõuna Prati linnaosas', d: 'Flower Burger (täielikult vegan burgerid) või Pinsa ’mpò (vegan pitsa) Castel Sant’Angelo lähedal.', check: 'Pühapäevased lahtiolekuajad on kontrollimata.', p: 'Flower Burger Prati, Roma' },
+        { t: '14:30', w: 'Castel Sant’Angelo', d: 'Lahti 9:00–19:30. Katuselt vaade Vatikanile ja Tiberile.', p: 'Castel Sant’Angelo, Roma' },
+        { t: '16:30', w: 'Jalutus Trastevere’sse', d: 'Jõe ääres umbes 2,5 km.', p: 'Santa Maria in Trastevere, Roma', mode: 'walking' },
+        { t: '19:30', w: 'Viimane õhtusöök', d: 'Vegan Italy Trastevere’s või Rifugio Romano Terminis.', check: 'Vegan Italy ei tulnud Google’i otsingus esile. Kontrolli olemasolu ja aegu, broneeri laud.', p: 'Vegan Italy, Trastevere, Roma' },
+        { t: '21:00', w: 'Trevi purskkaev', opt: true, d: 'Pimedas kõige ilusam. Takso või umbes 40 min jalgsi.', p: 'Trevi Fountain, Roma' }
+      ]
+    },
+    esmaspaev: {
+      date: '2026-11-02', tab: ['Esmaspäev', '2.11'], eyebrow: 'Esmaspäev · 2. november', title: 'Lahkumine',
+      lead: 'Lend väljub 11:45. Hommikul vaatamisväärsusi ei jõua.',
+      items: [
+        { t: '7:00', w: 'Ärkamine ja pakkimine' },
+        { t: '7:45', w: 'Hotellist välja', d: 'Check-out on lubatud kuni 11:00.', p: HOTEL },
+        { t: '8:10', w: 'Termini jaam', d: 'Hommikusöök.', p: 'Roma Termini' },
+        { t: '8:25', w: 'Leonardo Express Fiumicinosse', d: 'Sõit umbes 30 min.', check: 'Väljumisajad vaata Trenitalia lehelt.', link: ['Trenitalia', 'https://www.trenitalia.com'] },
+        { t: '9:15', w: 'Lennujaamas', d: 'Terminal 1, umbes 9:15–9:30.', p: 'Fiumicino Airport Terminal 1, Roma' },
+        { t: '11:45', w: 'LO302 väljub' }
+      ]
+    }
+  };
+
+  var CHECKS = [
+    'Vatikani muuseumide piletid laupäevaks (ametlik leht)',
+    'Rifugio Romano laud reedeks 20:15',
+    'Ma Va’ laud laupäevaks 13:00 ja kas see on olemas',
+    'Colosseumi piletid: vaata uuesti paar päeva enne reisi',
+    'Leonardo Expressi väljumisajad',
+    'Pantheoni ja Castel Sant’Angelo piletid',
+    'Maravé Gelato lahtiolek',
+    'Passid, vihmavari, laadijad'
+  ];
+  var SOURCES = [
+    ['Rifugio Romano, HappyCow', 'https://www.happycow.net/reviews/rifugio-romano-rome-72423'],
+    ['Ma Va’, HappyCow', 'https://www.happycow.net/reviews/ma-va-rome-61366'],
+    ['Il Grano, Spinach Guide', 'https://spinach.guide/venues/il-grano-90969'],
+    ['Campo de’ Fiori turg, TableJourney', 'https://tablejourney.com/italy/rome/markets/campo-de-fiori/'],
+    ['Vegan food near the Vatican', 'https://foodtourrome.com/vegan-food-near-the-vatican/']
+  ];
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function ext(label, href, cls) {
+    var a = el('a', cls || 'btn', label + ' ↗');
+    a.href = href; a.target = '_blank'; a.rel = 'noopener';
+    return a;
+  }
+  function pad(n) { return ('0' + n).slice(-2); }
+  function todayStr() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+  var checked = {};
+  try { checked = JSON.parse(localStorage.getItem('rooma-checks') || '{}') || {}; } catch (e) { checked = {}; }
+  function saveChecks() { try { localStorage.setItem('rooma-checks', JSON.stringify(checked)); } catch (e) {} }
+
+  var tabs = document.getElementById('tabs');
+  ORDER.forEach(function (id) {
+    var a = el('a', 'tab');
+    a.href = '#' + id;
+    a.dataset.id = id;
+    if (id === 'reis') { a.appendChild(el('span', null, 'Reis')); a.appendChild(el('b', null, 'Info')); }
+    else { a.appendChild(el('span', null, DAYS[id].tab[0])); a.appendChild(el('b', null, DAYS[id].tab[1])); }
+    tabs.appendChild(a);
+  });
+
+  function renderDay(day) {
+    var f = document.createDocumentFragment();
+    var eb = el('p', 'eyebrow', day.eyebrow);
+    if (day.date === todayStr()) eb.appendChild(el('span', 'today', 'Täna'));
+    f.appendChild(eb);
+    f.appendChild(el('h1', null, day.title));
+    f.appendChild(el('p', 'lead', day.lead));
+    if (day.note) f.appendChild(el('p', 'note', day.note));
+    var mh = el('div', 'map'); mh.setAttribute('role', 'img'); mh.setAttribute('aria-label', 'Päeva kaart');
+    f.appendChild(mh);
+    f.appendChild(el('p', 'cap', 'Kaardil on ainult kindlad kohad, kõik peatused on allpool.'));
+    var ol = el('ol', 'tl');
+    day.items.forEach(function (it) {
+      var li = el('li');
+      li.appendChild(el('div', 'time', it.t));
+      var c = el('div');
+      var w = el('div', 'what', it.w);
+      if (it.opt) w.appendChild(el('span', 'opt', 'valikuline'));
+      c.appendChild(w);
+      if (it.d) c.appendChild(el('p', 'det', it.d));
+      if (it.check) { var k = el('p', 'check'); k.appendChild(el('strong', null, 'Kontrolli')); k.appendChild(document.createTextNode(it.check)); c.appendChild(k); }
+      if (it.p || it.link) {
+        var acts = el('div', 'acts');
+        if (it.p) { acts.appendChild(ext('Kaart', find(it.p))); acts.appendChild(ext('Juhised', go(it.p, it.mode))); }
+        if (it.link) acts.appendChild(ext(it.link[0], it.link[1]));
+        c.appendChild(acts);
+      }
+      li.appendChild(c);
+      ol.appendChild(li);
+    });
+    f.appendChild(ol);
+    return f;
+  }
+
+  function copyText(text, btn) {
+    var done = function () { var o = btn.textContent; btn.textContent = 'Kopeeritud'; setTimeout(function () { btn.textContent = o; }, 1500); };
+    var fallback = function () {
+      var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(t);
+    };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  }
+
+  function renderInfo() {
+    var f = document.createDocumentFragment();
+    f.appendChild(el('p', 'eyebrow', 'Reisi andmed'));
+    f.appendChild(el('h1', null, 'Reis'));
+
+    f.appendChild(el('h2', null, 'Lennud'));
+    var dl = el('dl', 'kv');
+    [['Tulek', 'LO303, reede 30.10, maandumine 18:15'], ['Tagasi', 'LO302, esmaspäev 2.11, väljumine 11:45'], ['Lennujaam', 'Fiumicino (FCO), terminal 1']].forEach(function (r) {
+      dl.appendChild(el('dt', null, r[0])); dl.appendChild(el('dd', 'mono', r[1]));
+    });
+    f.appendChild(dl);
+
+    f.appendChild(el('h2', null, 'Majutus'));
+    var hl = el('dl', 'kv');
+    [['Nimi', 'Bob W Rome San Lorenzo (Sonder San Lorenzo Apartments)'], ['Aadress', 'Via dei Reti 25, 00185 Roma'], ['Check-in', '15:00–00:00'], ['Check-out', 'kuni 11:00'], ['Kuhu', 'Tramm Reti peatus 1 min, Termini 25 min jalgsi']].forEach(function (r) {
+      hl.appendChild(el('dt', null, r[0])); hl.appendChild(el('dd', r[0] === 'Check-in' || r[0] === 'Check-out' ? 'mono' : null, r[1]));
+    });
+    f.appendChild(hl);
+    var acts = el('div', 'acts');
+    acts.appendChild(ext('Kaart', find(HOTEL)));
+    acts.appendChild(ext('Juhised', go(HOTEL)));
+    var cb = el('button', 'btn', 'Kopeeri aadress'); cb.type = 'button';
+    cb.addEventListener('click', function () { copyText('Via dei Reti 25, 00185 Roma', cb); });
+    acts.appendChild(cb);
+    f.appendChild(acts);
+    f.appendChild(el('h2', null, 'Prinditav'));
+    var pdf = el('a', 'btn', 'Ava PDF: kaart ja ajakava'); pdf.href = 'rooma_kaart.pdf'; f.appendChild(pdf);
+
+    f.appendChild(el('h2', null, 'Enne reisi'));
+    var ul = el('ul', 'list');
+    CHECKS.forEach(function (txt, i) {
+      var li = el('li'); var lab = el('label'); var inp = el('input'); inp.type = 'checkbox'; inp.id = 'chk' + i; inp.checked = !!checked[i];
+      inp.addEventListener('change', function () { if (inp.checked) checked[i] = 1; else delete checked[i]; saveChecks(); });
+      lab.appendChild(inp); lab.appendChild(el('span', null, txt)); li.appendChild(lab); ul.appendChild(li);
+    });
+    f.appendChild(ul);
+
+    f.appendChild(el('h2', null, 'Hea teada'));
+    var tips = el('ul', 'src');
+    ['Päike loojub umbes 17:00, õhtud on pimedad. Võta vihmavari.',
+     'Vatikani muuseumid on pühapäeval ja 1. novembril suletud. Campo de’ Fiori turg on pühapäeval suletud.',
+     'Colosseumi piletid olid välja müüdud. Vaata ametlikku lehte uuesti, tühistatud kohad ilmuvad sinna tagasi.'
+    ].forEach(function (t) { tips.appendChild(el('li', null, t)); });
+    f.appendChild(tips);
+
+    f.appendChild(el('h2', null, 'Allikad'));
+    var s = el('ul', 'src');
+    SOURCES.forEach(function (r) { var li = el('li'); li.appendChild(ext(r[0], r[1], 'srclink')); li.lastChild.style.color = 'var(--accent)'; s.appendChild(li); });
+    f.appendChild(s);
+
+    var ft = el('footer', null, 'Koostatud 29.10.2026. Lahtiolekuajad pärinevad veebiallikatest ja vajavad kontrolli.');
+    f.appendChild(ft);
+    return f;
+  }
+
+  var map = null;
+  function drawMap(day, host) {
+    var cap = host.nextSibling;
+    function hide() { host.hidden = true; if (cap) cap.hidden = true; }
+    if (typeof L === 'undefined') { hide(); return; }
+    var pts = [], seen = {};
+    day.items.forEach(function (it) {
+      var c = it.p === HOTEL ? HOTELLL : LLS[it.p];
+      if (!c) return;
+      var k = c.join(',');
+      if (seen[k]) return;
+      seen[k] = 1;
+      pts.push({ c: c, it: it });
+    });
+    if (!pts.length) { hide(); return; }
+    map = L.map(host, { scrollWheelZoom: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+    var n = 0, line = [], all = [];
+    pts.forEach(function (p) {
+      var opt = !!p.it.opt;
+      if (!opt) { n++; line.push(p.c); }
+      all.push(p.c);
+      var icon = L.divIcon({ className: 'pin' + (opt ? ' opt' : ''), html: opt ? '+' : String(n), iconSize: [30, 30], iconAnchor: [15, 15] });
+      var pop = document.createElement('div');
+      pop.textContent = p.it.t + '  ' + p.it.w;
+      L.marker(p.c, { icon: icon, title: p.it.w }).addTo(map).bindPopup(pop);
+    });
+    if (line.length > 1) L.polyline(line, { color: '#17917a', weight: 3, dashArray: '6 8' }).addTo(map);
+    map.fitBounds(L.latLngBounds(all), { padding: [34, 34], maxZoom: 15 });
+  }
+
+  var view = document.getElementById('view');
+  function show() {
+    var id = (location.hash || '').slice(1);
+    if (ORDER.indexOf(id) < 0) {
+      id = 'reede';
+      ORDER.forEach(function (k) { if (DAYS[k] && DAYS[k].date === todayStr()) id = k; });
+    }
+    if (map) { map.remove(); map = null; }
+    view.textContent = '';
+    view.appendChild(id === 'reis' ? renderInfo() : renderDay(DAYS[id]));
+    if (id !== 'reis') drawMap(DAYS[id], view.querySelector('.map'));
+    Array.prototype.forEach.call(tabs.children, function (a) {
+      if (a.dataset.id === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', show);
+  show();
+})();
+</script>
+</body>
+</html>
